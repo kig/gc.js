@@ -67,9 +67,7 @@ MarkSweep.prototype.markPointers = function(start, length) {
 	var v = this.heap[start];
 	if (this.isPointer(v)) {
 	    var a = this.allocationIndex[v];
-	    if (a === undefined) {
-		this.heap[start] = 0;
-	    } else {
+	    if (a !== undefined) {
 		a.marked = true;
 	    }
 	}
