@@ -23,6 +23,5 @@ Current status
 		       marks found pointers.
 		 Sweep: go through array of allocs, collect unmarked to free list,
 		        delete each allocation in free list.
-		 Compact: Uh? Free memory? Why?
 
  
