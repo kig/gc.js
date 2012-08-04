@@ -1,27 +1,22 @@
 GC.js
 -----
 
-Garbage Collector implementations in JavaScript.
-
-For fun.
-
-No, really.
+Garbage Collector implementations in JavaScript for fun~
 
 
 Current status
 --------------
 
 - mark_sweep.js: Version 0.0
-                 Weird mark-and-sweep collector with a O(n^2) allocator.
-                 Perhaps more accurately a mark-and-weep collector.
-                 Instead of roots, uses pointers to self to mark
-		 object as permanent. Don't do that.
-		 Tags pointers with MSB set to 1.
-		 Each allocation has {start, length}-struct as overhead.
+  Weird mark-and-sweep collector with a O(n^2) allocator.
+  Perhaps more accurately a mark-and-weep collector.
+  Instead of roots, uses pointers to self to mark objects as permanent. Don't do that.
+  Tags pointers with MSB set to 1.
+  Each allocation has {start, length}-struct as overhead.
 
-		 Mark: go through array of allocs, go through body of each alloc,
-		       marks found pointers.
-		 Sweep: go through array of allocs, collect unmarked to free list,
-		        delete each allocation in free list.
+  Mark: go through array of allocs, go through body of each alloc,
+        marks found pointers.
+  Sweep: go through array of allocs, collect unmarked to free list,
+         delete each allocation in free list.
 
  
