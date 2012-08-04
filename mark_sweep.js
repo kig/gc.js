@@ -51,13 +51,13 @@ MarkSweep.prototype.addAllocation = function(start, length) {
     var a = new Allocation(start, length);
     this.allocationArray.push(a);
     this.allocationArray.sort(this.cmp);
-    this.allocationIndex[start] = a;
+    this.allocationIndex[start | 0x8000000] = a;
     this.modifyHeapNodeUseCount(a.start, a.length, +1);
 };
 
 MarkSweep.prototype.deleteAllocation = function(a) {
     this.allocationArray.splice(this.allocationArray.indexOf(a), 1);
-    delete this.allocationIndex[a.start];
+    delete this.allocationIndex[a.start | 0x8000000];
     this.modifyHeapNodeUseCount(a.start, a.length, -1);
 };
 
@@ -85,6 +85,10 @@ MarkSweep.prototype.allocate = function(size) {
     return ptr;
 };
 
+MarkSweep.prototype.isPointer = function(v) {
+    return (v & 0x8000000 > 0);
+};
+
 MarkSweep.prototype.mark = function() {
     var i,l,v,j,k,seg;
     this.unmarkAllocations();
@@ -93,9 +97,8 @@ MarkSweep.prototype.mark = function() {
 	seg = heap[i];
 	for (j=0, k=seg.length; j<k; j++) {
 	    v = seg[i];
-	    var a = this.allocationIndex[v];
-	    if (a !== undefined) {
-		a.marked = true;
+	    if (this.isPointer(v)) {
+		this.allocationIndex[v].marked = true;
 	    }
 	}
     }
