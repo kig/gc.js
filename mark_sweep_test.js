@@ -56,12 +56,15 @@ MSTest.prototype.test_gc_preserves_marked = function() {
     var ms = this.ms;
     var b = ms.allocate(1);
     var a = ms.allocate(1);
-    assertEqual(2, ms.allocationArray.length);
+    var c = ms.allocate(1);
+    assertEqual(3, ms.allocationArray.length);
     ms.setPtr(a.start, b.start);
+    ms.setPtr(b.start, c.start);
     ms.gc([a]);
     assertEqual(a.marked, true, 'a marked');
     assertEqual(b.marked, true, 'b marked');
-    assertEqual(2, ms.allocationArray.length);
+    assertEqual(c.marked, true, 'c marked');
+    assertEqual(3, ms.allocationArray.length);
     ms.setWord(a.start, 0);
     ms.gc([a]);
     assertEqual(a.marked, true, 'a marked');

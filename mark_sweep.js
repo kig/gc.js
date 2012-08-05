@@ -9,15 +9,17 @@ MarkSweep = function(heapSize, heapSegmentSize) {
     this.heap = new Int32Array(this.heapSize);
     this.heapSegmentSize = heapSegmentSize || 262138;
     this.heapUsage = 0;
+    this.heapPtr = 0;
+    this.allocationCount = 0;
     this.allocationIndex = {};
     this.allocationArray = [];
 };
 
 MarkSweep.prototype.allocate = function(size) {
-    var ptr = this.findFreeSpace(size);
-    if (ptr < 0) {
+    var ptr = this.heapPtr;
+    this.heapPtr += size;
+    if (this.heapPtr > this.heapSize) {
 	this.expandHeapBy(size);
-	ptr = this.findFreeSpace(size);
     }
     return this.addAllocation(ptr, size);
 };
@@ -39,7 +41,7 @@ MarkSweep.prototype.expandHeapBy = function(size) {
 MarkSweep.prototype.compact = function() {
     var sz = this.heapSegmentSize * Math.ceil(this.heapUsage / this.heapSegmentSize);
     var newHeap = new Int32Array(sz);
-    this.allocationIndex = {};
+    var ai = {};
     var off = 0;
     for (var i=0; i<this.allocationArray.length; i++) {
 	var a = this.allocationArray[i];
@@ -48,8 +50,10 @@ MarkSweep.prototype.compact = function() {
 	}
 	a.start = off;
 	off += a.length;
-	this.allocationIndex[a.start | 0x80000000] = a;
+	ai[a.start | 0x80000000] = a;
     }
+    this.allocationIndex = ai;
+    this.heapPtr = off;
     this.heap = newHeap;
     this.heapSize = sz;
 };
@@ -70,27 +74,20 @@ MarkSweep.prototype.findFreeSpace = function(size) {
     return -1;
 };
 
-MarkSweep.prototype.cmp = function(a,b) {
-    return a.start - b.start;
-};
-
 MarkSweep.prototype.addAllocation = function(start, length) {
     var a = new Allocation(start, length);
     this.allocationArray.push(a);
-    this.allocationArray.sort(this.cmp);
     this.allocationIndex[start | 0x80000000] = a;
     this.heapUsage += length;
+    this.allocationCount++;
     return a;
 };
 
 MarkSweep.prototype.deleteAllocation = function(a) {
-    var idx = this.allocationArray.indexOf(a);
-    if (idx == -1) {
-	return;
-    }
-    this.allocationArray.splice(idx, 1);
     delete this.allocationIndex[a.start | 0x80000000];
+    this.allocationCount--;
     this.heapUsage -= a.length;
+    a.length = 0;
 };
 
 MarkSweep.prototype.setPtr = function(offset, value) {
@@ -124,6 +121,19 @@ MarkSweep.prototype.unmarkAllocations = function() {
     }
 };
 
+MarkSweep.prototype.cleanUpAllocationArray = function() {
+    var i, a, l;
+    var all = this.allocationArray;
+    var aa = [];
+    for (i=0, l=all.length; i<l; i++) {
+	a = all[i];
+	if (a.length > 0) { // clean up deleted allocations
+	    aa.push(a);
+	}
+    }
+    this.allocationArray = aa;
+};
+
 MarkSweep.prototype.gc = function(rootSet) {
     this.mark(rootSet);
     this.sweep();
@@ -148,15 +158,14 @@ MarkSweep.prototype.mark = function(rootSet) {
 MarkSweep.prototype.sweep = function() {
     var i, a, l;
     var all = this.allocationArray;
-    var freed = [];
     for (i=0, l=all.length; i<l; i++) {
 	a = all[i];
 	if (!a.marked) {
-	    freed.push(a);
+	    this.deleteAllocation(a);
 	}
     }
-    for (i=0, l=freed.length; i<l; i++) {
-	this.deleteAllocation(freed[i]);
+    if (this.allocationCount < this.allocationArray.length/2) {
+	this.cleanUpAllocationArray();
     }
 };
 
