@@ -25,7 +25,11 @@ MSTest.prototype.setup = function() {
 MSTest.prototype.teardown = function() {};
 
 assertEqual = function(a, b, msg) {
-    if (a != b) throw("assertEqual: "+a+" != "+b+". "+msg);
+    if (a != b) throw("assertEqual: "+a+" != "+b+". "+(msg||''));
+};
+
+assert = function(b, msg) {
+    if (!b) throw("assert: failed. "+(msg||''));
 };
 
 MSTest.prototype.test_allocation = function() {
@@ -43,23 +47,28 @@ MSTest.prototype.test_gc = function() {
     var a = ms.allocate(1);
     assertEqual(1, ms.heapUsage);
     assertEqual(a, ms.allocationArray[0]);
-    ms.gc();
+    ms.gc([]);
     assertEqual(0, ms.heapUsage);
     assertEqual(0, ms.allocationArray.length);
 };
 
 MSTest.prototype.test_gc_preserves_marked = function() {
     var ms = this.ms;
-    var a = ms.allocate(1);
     var b = ms.allocate(1);
+    var a = ms.allocate(1);
     assertEqual(2, ms.allocationArray.length);
     ms.setPtr(a.start, b.start);
-    ms.gc();
-    assertEqual(a.marked, false, 'a marked');
+    ms.gc([a]);
+    assertEqual(a.marked, true, 'a marked');
     assertEqual(b.marked, true, 'b marked');
+    assertEqual(2, ms.allocationArray.length);
+    ms.setWord(a.start, 0);
+    ms.gc([a]);
+    assertEqual(a.marked, true, 'a marked');
+    assertEqual(b.marked, false, 'b marked');
     assertEqual(1, ms.allocationArray.length);
-    assertEqual(b, ms.allocationArray[0]);
-    ms.gc();
+    assertEqual(a, ms.allocationArray[0]);
+    ms.gc([]);
     assertEqual(0, ms.allocationArray.length);
 };
 
@@ -73,7 +82,7 @@ MSTest.prototype.test_allocation_and_gc = function() {
     }
     assertEqual(allocs.reduce(function(s,i){ return s+i.length; }, 0), total);
     assertEqual(total, ms.heapUsage);
-    ms.gc();
+    ms.gc([]);
     assertEqual(0, ms.heapUsage);
 };
 
@@ -96,21 +105,37 @@ MSTest.prototype.test_gc_keeps_refs = function() {
 	mtotal++;
     }
     assertEqual(total, ms.heapUsage);
-    ms.mark();
+    ms.mark([ptrs]);
     assertEqual(ptrs.marked, true, 'root marked');
     for (i=0; i<allocs.length; i++) {
-	assertEqual(ptrs.marked, true);
+	assertEqual(allocs[i].marked, true);
     }
-    ms.gc();
+    ms.gc([ptrs]);
     assertEqual(total, ms.heapUsage);
     for (i=0; i<100; i++) {
 	a = allocs[i];
 	ms.setWord(a.start, 0);
     }
-    ms.gc();
+    ms.gc([ptrs]);
     assertEqual(mtotal, ms.heapUsage);
-    ms.setWord(ptrs.start, 0);
-    ms.gc();
-    ms.gc();
+    ms.gc([]);
     assertEqual(0, ms.heapUsage);
 };
+
+MSTest.prototype.test_compaction = function() {
+    var ms = this.ms;
+    var total = 0;
+    var allocs = [];
+    for (var i=0; i<200; i++) {
+	allocs.push(ms.allocate(10000));
+    }
+    assertEqual(200*10000, ms.heapUsage);
+    var hs = ms.heapSize;
+    ms.gc(allocs.slice(0,100));
+    assertEqual(100*10000, ms.heapUsage);
+    assert(hs > ms.heapSize, 'heap shrunk');
+    ms.gc([]);
+    assertEqual(0, ms.heapUsage);
+    assertEqual(0, ms.heapSize);
+};
+

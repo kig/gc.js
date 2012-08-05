@@ -7,16 +7,29 @@ Garbage Collector implementations in JavaScript for fun~
 Current status
 --------------
 
-- mark_sweep.js: Version 0.0
-  Weird mark-and-sweep collector with a O(n^2) allocator.
+- mark_sweep.js: Version 0.0.1
+  Weird mark-and-sweep collector with an O(n^2) allocator.
   Perhaps more accurately a mark-and-weep collector.
-  Instead of roots, uses pointers to self to mark objects as permanent. Don't do that.
-  Tags pointers with MSB set to 1.
-  Each allocation has {start, length}-struct as overhead.
+  Tags pointers by setting the MSB.
+  Each allocation has a {start, length}-struct as overhead.
 
-  Mark: go through array of allocs, go through body of each alloc,
-        marks found pointers.
-  Sweep: go through array of allocs, collect unmarked to free list,
-         delete each allocation in free list.
+  Mark: goes through a root set of allocs, marks and follows found pointers
+        breadth-first (...)
+  Sweep: goes through the array of allocs, collects unmarked to the free list,
+         deletes each allocation in the free list.
 
- 
+  Usage:
+    var ms = new MarkSweep();
+    var allocs = [];
+    for (var i=0; i<10; i++) {
+        allocs.push(ms.allocate(40)); // allocate 40 words
+    }
+    // refer to allocs[7] from allocs[0]
+    ms.setPtr(allocs[0].start, allocs[7].start);
+    // write 12345 to word 4 of allocs[7]
+    ms.setWord(allocs[7].start+4, 12345);
+    // GC with the first half of objects as roots
+    ms.gc(allocs.slice(0,5));
+    ms.allocationArray.length == 6; // first five and the 7
+    // get word 4 of allocs[7]
+    ms.getWord(allocs[7].start+4);

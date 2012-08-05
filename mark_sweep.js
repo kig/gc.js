@@ -13,6 +13,19 @@ MarkSweep = function(heapSize, heapSegmentSize) {
     this.allocationArray = [];
 };
 
+MarkSweep.prototype.allocate = function(size) {
+    var ptr = this.findFreeSpace(size);
+    if (ptr < 0) {
+	this.expandHeapBy(size);
+	ptr = this.findFreeSpace(size);
+    }
+    return this.addAllocation(ptr, size);
+};
+
+MarkSweep.prototype.isPointer = function(v) {
+    return ((v & 0x80000000) != 0);
+};
+
 MarkSweep.prototype.expandHeapBy = function(size) {
     while (size > 0) {
 	size -= this.heapSegmentSize;
@@ -21,6 +34,24 @@ MarkSweep.prototype.expandHeapBy = function(size) {
     var newHeap = new Int32Array(this.heapSize);
     newHeap.set(this.heap);
     this.heap = newHeap;
+};
+
+MarkSweep.prototype.compact = function() {
+    var sz = this.heapSegmentSize * Math.ceil(this.heapUsage / this.heapSegmentSize);
+    var newHeap = new Int32Array(sz);
+    this.allocationIndex = {};
+    var off = 0;
+    for (var i=0; i<this.allocationArray.length; i++) {
+	var a = this.allocationArray[i];
+	for (var j=0; j<a.length; j++) {
+	    newHeap[off+j] = this.heap[a.start+j];
+	}
+	a.start = off;
+	off += a.length;
+	this.allocationIndex[a.start | 0x80000000] = a;
+    }
+    this.heap = newHeap;
+    this.heapSize = sz;
 };
 
 MarkSweep.prototype.findFreeSpace = function(size) {
@@ -62,18 +93,6 @@ MarkSweep.prototype.deleteAllocation = function(a) {
     this.heapUsage -= a.length;
 };
 
-MarkSweep.prototype.markPointers = function(start, length) {
-    for (var last=start+length; start < last; start++) {
-	var v = this.heap[start];
-	if (this.isPointer(v)) {
-	    var a = this.allocationIndex[v];
-	    if (a !== undefined) {
-		a.marked = true;
-	    }
-	}
-    }
-};
-
 MarkSweep.prototype.setPtr = function(offset, value) {
     this.heap[offset] = value | 0x80000000;
 };
@@ -86,37 +105,43 @@ MarkSweep.prototype.getWord = function(offset) {
     return this.heap[offset];
 };
 
+MarkSweep.prototype.markPointers = function(start, length, rootSet) {
+    for (var last=start+length, i=start; i < last; i++) {
+	var v = this.heap[i];
+	if (this.isPointer(v) && v != (i | 0x80000000)) { // pointer but not to self
+	    var a = this.allocationIndex[v];
+	    if (a !== undefined && !a.marked) {
+		rootSet.push(a);
+		a.marked = true;
+	    }
+	}
+    }
+};
+
 MarkSweep.prototype.unmarkAllocations = function() {
     for (var i=0, l=this.allocationArray.length; i<l; i++) {
 	this.allocationArray[i].marked = false;
     }
 };
 
-MarkSweep.prototype.allocate = function(size) {
-    var ptr = this.findFreeSpace(size);
-    if (ptr < 0) {
-	this.expandHeapBy(size);
-	ptr = this.findFreeSpace(size);
-    }
-    return this.addAllocation(ptr, size);
-};
-
-MarkSweep.prototype.isPointer = function(v) {
-    return ((v & 0x80000000) != 0);
-};
-
-MarkSweep.prototype.gc = function() {
-    this.mark();
+MarkSweep.prototype.gc = function(rootSet) {
+    this.mark(rootSet);
     this.sweep();
+    if (this.heapUsage < this.heapSize/2 && (this.heapSize > this.heapSegmentSize || this.heapSize == 0)) {
+	this.compact();
+    }
 };
 
-MarkSweep.prototype.mark = function() {
-    var i,l,v,j,k,seg,a;
+MarkSweep.prototype.mark = function(rootSet) {
+    var i,a;
     this.unmarkAllocations();
-    var all = this.allocationArray;
-    for (i=0, l=all.length; i<l; i++) {
-	a = all[i];
-	this.markPointers(a.start, a.length);
+    for (i=0; i<rootSet.length; i++) {
+	a = rootSet[i];
+	a.marked = true;
+    }
+    for (i=0; i<rootSet.length; i++) {
+	a = rootSet[i];
+	this.markPointers(a.start, a.length, rootSet);
     }
 };
 
